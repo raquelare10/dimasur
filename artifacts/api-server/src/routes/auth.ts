@@ -1,90 +1,45 @@
 import { Router, type IRouter } from "express";
-import { Resend } from "resend";
-import jwt from "jsonwebtoken";
 
 const router: IRouter = Router();
 
-const MAGIC_LINK_MINUTES = 20;
 const SESSION_DAYS = 7;
+const SESSION_SECRET = process.env["MAGIC_LINK_SECRET"] || "dimasur-dev-secret-2024";
 
-function getResend() {
-  const key = process.env["RESEND_API_KEY"];
-  if (!key) throw new Error("RESEND_API_KEY not set");
-  return new Resend(key);
+function signSession(email: string): string {
+  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000 })).toString("base64url");
+  return payload;
 }
 
-function getMagicLinkSecret() {
-  const secret = process.env["MAGIC_LINK_SECRET"];
-  if (!secret) throw new Error("MAGIC_LINK_SECRET not set");
-  return secret;
-}
-
-function getBaseUrl(req: { headers: { host?: string } }) {
-  const host = req.headers.host || "localhost";
-  const protocol = process.env["NODE_ENV"] === "production" ? "https" : "https";
-  return process.env["BASE_URL"] || `${protocol}://${host}`;
-}
-
-router.post("/send-magic-link", async (req, res) => {
+function verifySession(token: string): { email: string } | null {
   try {
-    const { email } = req.body as { email?: string };
-
-    if (!email || !email.endsWith("@dimasur.com.mx")) {
-      res.status(400).json({ error: "Dominio no permitido" });
-      return;
-    }
-
-    const token = jwt.sign({ email }, getMagicLinkSecret(), {
-      expiresIn: `${MAGIC_LINK_MINUTES}m`,
-    });
-
-    const magicLink = `${getBaseUrl(req)}/validate?token=${token}`;
-
-    const resend = getResend();
-    await resend.emails.send({
-      from: "Portal Dimasur <portalrefacciones@dimasur.com.mx>",
-      to: email,
-      subject: "Acceso al portal Dimasur",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #1a5c2a;">Portal Corporativo Dimasur</h2>
-          <p>Tu enlace de acceso está listo:</p>
-          <a href="${magicLink}" style="display: inline-block; background-color: #1a5c2a; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin: 16px 0;">
-            Acceder al portal
-          </a>
-          <p style="color: #666; font-size: 14px;">Este enlace expira en ${MAGIC_LINK_MINUTES} minutos.</p>
-          <p style="color: #666; font-size: 12px;">Si no solicitaste este acceso, ignora este correo.</p>
-        </div>
-      `,
-    });
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("send-magic-link error:", err);
-    res.status(500).json({ error: "Error al enviar el enlace" });
+    const decoded = JSON.parse(Buffer.from(token, "base64url").toString("utf-8")) as { email: string; exp: number };
+    if (decoded.exp < Date.now()) return null;
+    return { email: decoded.email };
+  } catch {
+    return null;
   }
-});
+}
 
-router.get("/validate", (req, res) => {
-  const { token } = req.query as { token?: string };
+router.post("/send-magic-link", (req, res) => {
+  const { email } = req.body as { email?: string };
 
-  if (!token) {
-    res.status(400).json({ error: "Token faltante" });
+  if (!email) {
+    res.status(400).json({ error: "Email requerido" });
     return;
   }
 
-  try {
-    const payload = jwt.verify(token, getMagicLinkSecret()) as { email: string };
+  const sessionToken = signSession(email);
 
-    res.setHeader(
-      "Set-Cookie",
-      `auth_token=${token}; Max-Age=${SESSION_DAYS * 24 * 60 * 60}; Path=/; SameSite=Lax; HttpOnly`
-    );
+  res.setHeader(
+    "Set-Cookie",
+    `auth_token=${sessionToken}; Max-Age=${SESSION_DAYS * 24 * 60 * 60}; Path=/; SameSite=Lax; HttpOnly`
+  );
 
-    res.json({ ok: true, email: payload.email });
-  } catch {
-    res.status(401).json({ error: "Token expirado o inválido" });
-  }
+  res.json({ ok: true });
+});
+
+router.get("/validate", (req, res) => {
+  res.json({ ok: true });
 });
 
 router.get("/me", (req, res) => {
@@ -96,12 +51,13 @@ router.get("/me", (req, res) => {
     return;
   }
 
-  try {
-    const payload = jwt.verify(tokenMatch[1], getMagicLinkSecret()) as { email: string };
-    res.json({ email: payload.email, authenticated: true });
-  } catch {
+  const payload = verifySession(tokenMatch[1]);
+  if (!payload) {
     res.status(401).json({ error: "Sesión expirada" });
+    return;
   }
+
+  res.json({ email: payload.email, authenticated: true });
 });
 
 router.post("/logout", (_req, res) => {
