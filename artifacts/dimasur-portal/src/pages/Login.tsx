@@ -3,17 +3,17 @@ import { useLocation } from "wouter";
 import { useSendMagicLink } from "@workspace/api-client-react";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { TechBackground } from "@/components/TechBackground";
-import { Mail, ArrowRight, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Mail, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Login() {
   const [username, setUsername] = useState("");
-  const [submittedEmail, setSubmittedEmail] = useState("");
-  
+  const [, navigate] = useLocation();
+
   // Will redirect if already authenticated
   useAuthGuard(false);
 
-  const { mutateAsync: sendMagicLink, isPending, isSuccess } = useSendMagicLink();
+  const { mutateAsync: sendMagicLink, isPending } = useSendMagicLink();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,11 +22,9 @@ export default function Login() {
     const fullEmail = `${username.trim()}@dimasur.com.mx`;
     try {
       await sendMagicLink({ data: { email: fullEmail } });
-      setSubmittedEmail(fullEmail);
+      navigate("/portal");
     } catch (error) {
-      console.error("Failed to send magic link", error);
-      // Let Tanstack Query handle toast via generic error handler if configured, 
-      // otherwise user will be able to retry.
+      console.error("Login failed", error);
     }
   };
 
@@ -52,8 +50,7 @@ export default function Login() {
             <p className="text-muted-foreground text-sm">Acceso seguro para colaboradores</p>
           </div>
 
-          {!isSuccess ? (
-            <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+          <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground ml-1" htmlFor="username">
                   Usuario
@@ -90,11 +87,11 @@ export default function Login() {
                   {isPending ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Enviando enlace...
+                      Accediendo...
                     </>
                   ) : (
                     <>
-                      Enviar enlace seguro
+                      Acceder al portal
                       <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
@@ -103,28 +100,9 @@ export default function Login() {
               
               <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mt-6">
                 <ShieldCheck className="w-4 h-4 text-primary/70" />
-                <span>Autenticación sin contraseña</span>
+                <span>Acceso corporativo Dimasur</span>
               </div>
             </form>
-          ) : (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-6 space-y-4 relative z-10"
-            >
-              <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="w-10 h-10 text-primary" />
-              </div>
-              <h3 className="text-xl font-display font-bold text-foreground">Revisa tu correo</h3>
-              <p className="text-muted-foreground leading-relaxed text-sm">
-                Hemos enviado un enlace de acceso seguro a <br/>
-                <strong className="text-foreground">{submittedEmail}</strong>
-              </p>
-              <p className="text-xs text-muted-foreground/70 mt-6 pt-6 border-t border-white/5">
-                Haz clic en el enlace del correo para iniciar sesión automáticamente. Puedes cerrar esta pestaña.
-              </p>
-            </motion.div>
-          )}
         </div>
       </motion.div>
       
