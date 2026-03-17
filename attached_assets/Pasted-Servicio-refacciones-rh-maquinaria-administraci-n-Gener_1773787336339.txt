@@ -1,0 +1,788 @@
+Servicio, refacciones, rh, maquinaria, administración
+
+Generame una pagina web, con el código modular por accesos departamentales (Servicio, refacciones, rh, maquinaria, administración). Con un inicio global, navbar (con botón de cerrar sesión),etc. Inicialmente va a ocupar un sistema de login como te los prsento en el código que te dejo, el cual va a usar resend para enviar magiclinks al correo del usuario y pueda permitirle el acceso. 
+
+Crea una aplicación web usando React con un diseño moderno tipo dashboard similar a un portal corporativo.
+
+### Diseño general:
+
+* Header superior con:
+
+  * Logo a la izquierda
+  * Título centrado: "   "
+  * Menú a la derecha con: "Inicio", "Dashboard" y botón "Cerrar sesión"
+* Fondo animado con estilo tecnológico (puede ser degradado verde oscuro con elementos sutiles tipo red/conexiones)
+
+### Contenido principal:
+
+* En lugar de tarjetas (cards), crea una sección de navegación principal con 5 botones grandes, centrados en pantalla.
+* Los botones deben tener estilo moderno (bordes redondeados, sombra suave, animación hover).
+* Distribución en grid responsivo (2 filas o centrado adaptable).
+
+### Botones:
+
+Los botones deben llamarse:
+
+* Servicio
+* Refacciones
+* RH
+* Maquinaria
+* Administración
+
+### Comportamiento:
+
+* Cada botón debe redirigir a una vista interna (NO abrir otra pestaña externa).
+* Usa React Router para navegación entre vistas.
+* Cada vista debe mostrar al menos:
+
+  * Título de la sección
+  * Un placeholder de contenido (ej: "Contenido de Servicio")
+  * Un botón de dashbord que redirija a otra vista interna 
+  * Una sección de "Información", la cual consista en el espejo de Google drive, en donde va a crear un botón por cada carpeta, y en cada carpeta habrá un panel con las características que te pongo debajo (drive section panel)
+  
+
+### Requisitos técnicos:
+
+* Usar React (preferentemente con Vite o Create React App)
+* Usar React Router DOM
+* Componentizar:
+
+  * Header
+  * Layout principal
+  * Botones de navegación
+  * Vistas por sección
+* Estilos con CSS moderno o Tailwind (preferible Tailwind)
+
+### Extras opcionales:
+
+* Animaciones suaves en hover (scale + sombra)
+* Transiciones entre páginas
+* Iconos representativos para cada sección
+
+El diseño debe verse limpio, corporativo y profesional.
+ 
+
+
+
+
+
+//api\send-magic-link.js
+//ENVIROMENT VARIABLES: RESEND_API_KEY, EMAIL_FROM, BASE_URL
+//NECESARY:RESEND EN EL JSON 
+
+import { Resend } from "resend";
+import jwt from "jsonwebtoken";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const MAGIC_LINK_MINUTES = 20;
+
+export default async function handler(req, res) {
+  const { email } = req.body;
+
+  if (!email.endsWith("@dimasur.com.mx")) {
+    return res.status(400).json({ error: "Dominio no permitido" });
+  }
+
+  const token = jwt.sign(
+    { email },
+    process.env.MAGIC_LINK_SECRET,
+    { expiresIn: `${MAGIC_LINK_MINUTES}m` }
+  );
+
+  const magicLink = `${process.env.NEXT_PUBLIC_BASE_URL}/validate?token=${token}`;
+
+  await resend.emails.send({
+    from: "Portal Dimasur <portalrefacciones@dimasur.com.mx>",
+    to: email,
+    subject: "Acceso al portal Dimasur",
+    html: `
+      <p>Tu acceso está listo:</p>
+      <a href="${magicLink}">Acceder al portal</a>
+      <p>Este enlace expira en 20 minutos.</p>
+    `,
+  });
+
+  res.status(200).json({ ok: true });
+}
+
+
+//api\validate-magic-link.js
+
+import jwt from "jsonwebtoken";
+
+export default function handler(req, res) {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ error: "Token faltante" });
+  }
+
+  try {
+    jwt.verify(token, process.env.MAGIC_LINK_SECRET);
+
+    const SESSION_DAYS = 7;
+
+    res.setHeader(
+      "Set-Cookie",
+      `auth=true; Max-Age=${SESSION_DAYS * 24 * 60 * 60}; Path=/; SameSite=Lax; Secure`
+    );
+
+    res.status(200).json({ ok: true });
+  } catch {
+    res.status(401).json({ error: "Token expirado o inválido" });
+  }
+}
+
+//src\components\Login.jsx
+
+import { useState } from "react";
+
+export default function Login() {
+  const [emailUser, setEmailUser] = useState("");
+  const [status, setStatus] = useState("form"); // form | sent | error
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const email = `${emailUser}@dimasur.com.mx`;
+
+    if (!emailUser) {
+      setError("Ingresa tu correo empresarial");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/send-magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!res.ok) throw new Error();
+
+      setStatus("sent");
+    } catch {
+      setError("Error al enviar el enlace");
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-96 text-center">
+        <h2 className="text-2xl font-bold mb-6">Acceso</h2>
+
+        {status === "form" && (
+          <form onSubmit={handleSubmit}>
+            {error && <p className="text-red-500 mb-4">{error}</p>}
+
+            <div className="flex mb-4">
+              <input
+                type="text"
+                placeholder="usuario"
+                value={emailUser}
+                onChange={(e) => setEmailUser(e.target.value)}
+                className="flex-1 p-2 border rounded-l-md"
+              />
+              <span className="p-2 bg-gray-200 border border-l-0 rounded-r-md">
+                @dimasur.com.mx
+              </span>
+            </div>
+
+            <button className="w-full bg-blue-600 text-white p-2 rounded-lg">
+              Enviar enlace
+            </button>
+          </form>
+        )}
+
+        {status === "sent" && (
+          <p className="text-green-600">
+            Te enviamos un enlace a tu correo para acceder.
+          </p>
+        )}
+
+        {status === "error" && (
+          <p className="text-red-600">
+            Ocurrió un problema, intenta de nuevo.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+//src\components\ValidateLogin.jsx
+//
+
+import { useEffect, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+
+export default function ValidateLogin() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+
+  const [status, setStatus] = useState("validating");
+  // validating | success | error
+
+  useEffect(() => {
+    const token = params.get("token");
+    if (!token) {
+      setStatus("error");
+      return;
+    }
+
+    fetch(`/api/validate-magic-link?token=${token}`, {
+      credentials: "include",
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        setStatus("success");
+
+        // ⏳ pequeña pausa para UX
+        setTimeout(() => {
+          navigate("/portal");
+        }, 1500);
+      })
+      .catch(() => {
+        setStatus("error");
+
+        setTimeout(() => {
+          navigate("/");
+        }, 2500);
+      });
+  }, [navigate, params]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      {status === "validating" && (
+        <p className="text-lg animate-pulse">Validando acceso…</p>
+      )}
+
+      {status === "success" && (
+        <div className="text-center">
+          <p className="text-2xl font-semibold text-green-400">
+            Sesión verificada ✅
+          </p>
+          <p className="mt-2 text-gray-300">
+            Redirigiendo al portal…
+          </p>
+        </div>
+      )}
+
+      {status === "error" && (
+        <div className="text-center">
+          <p className="text-xl text-red-400">
+            El enlace expiró o es inválido
+          </p>
+          <p className="mt-2 text-gray-300">
+            Redirigiendo al inicio…
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+//src\components\DriveSectionPanel.jsx
+
+import { useState, useEffect } from "react";
+import MultiLevelDrawer from "./MultiLevelDrawer";
+import MultiLevelMenu from "./MultiLevelMenu";
+import GenericPanel from "./GenericPanel";
+import IframeWithLoader from "./common/IframeWithLoader";
+import PanelLoader from "./common/PanelLoader";
+
+/**
+ * Panel genérico para secciones basadas en Drive
+ *
+ * Props:
+ * - isOpen: boolean
+ * - onClose: function
+ * - seccion: string (llantas, boletines, etc.)
+ * - leftTitle: string
+ * - emptyTitle: string ("Selecciona una categoría ...")
+ */
+export default function DriveSectionPanel({
+  isOpen,
+  onClose,
+  seccion,
+  leftTitle,
+  emptyTitle,
+}) {
+  const [activeSubmenu, setActiveSubmenu] = useState(null);
+  const [openPanelItem, setOpenPanelItem] = useState(null);
+  const [driveData, setDriveData] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [loadingStructure, setLoadingStructure] = useState(true);
+
+  /* ===============================
+     Carga estructura Drive
+  =============================== */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchData = async () => {
+      try {
+        setLoadingStructure(true);
+        setActiveSubmenu(null);   // 🔴 IMPORTANTE: reset limpio
+        setSelectedNode(null);
+
+        const res = await fetch(`/api/drive?seccion=${seccion}`);
+        const json = await res.json();
+
+        const adaptTree = (nodes) =>
+          nodes.map((n) => ({
+            id: n.id,
+            label: n.name || "Sin nombre",
+            type: n.type === "file" ? "url" : "folder",
+            url: n.url || null,
+            children: n.children ? adaptTree(n.children) : [],
+          }));
+
+        setDriveData(adaptTree(json));
+      } catch (err) {
+        console.error(`Error loading sección ${seccion}:`, err);
+      } finally {
+        setLoadingStructure(false);
+      }
+    };
+
+    fetchData();
+  }, [isOpen, seccion]);
+
+  /* ===============================
+     Datos derivados
+  =============================== */
+  const rightItems = activeSubmenu
+    ? driveData.find((n) => n.id === activeSubmenu)?.children || []
+    : [];
+
+  /* ===============================
+     Render
+  =============================== */
+  return (
+    <>
+      <MultiLevelDrawer isOpen={isOpen} onClose={onClose}>
+        <div className="bg-white rounded-2xl shadow p-4 flex h-[75vh] w-full overflow-x-auto min-h-0">
+          {loadingStructure && <PanelLoader />}
+
+          {/* ===== Panel izquierdo ===== */}
+          <div className="w-64 border-r p-4 flex flex-col gap-4">
+            <h3 className="font-semibold">{leftTitle}</h3>
+
+            <div className="flex-1 overflow-auto h-full">
+              {driveData.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => {
+                    setActiveSubmenu(n.id);
+                    setSelectedNode(null);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-md ${
+                    activeSubmenu === n.id
+                      ? "bg-blue-50"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  {n.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="text-sm text-gray-600 hover:text-gray-800"
+              onClick={onClose}
+            >
+              Cerrar
+            </button>
+          </div>
+
+          {/* ===== Panel derecho ===== */}
+          <div className="flex-1 p-4 flex flex-col min-h-0">
+            <h3 className="font-semibold mb-2">
+              {activeSubmenu
+                ? driveData.find((n) => n.id === activeSubmenu)?.label
+                : emptyTitle}
+            </h3>
+
+            <div className="flex-1 flex border rounded-md overflow-hidden min-h-0">
+              {/* Árbol */}
+              <div className="w-1/2 border-r p-3">
+                <MultiLevelMenu
+                  data={activeSubmenu ? rightItems : []}
+                  onOpenPanel={setOpenPanelItem}
+                  onSelectItem={setSelectedNode}
+                />
+              </div>
+
+              {/* Preview */}
+              <div className="flex-1 p-3 overflow-auto h-full min-h-[300px]">
+                {!selectedNode ? (
+                  <p className="text-gray-500">
+                    Selecciona un archivo para previsualizarlo.
+                  </p>
+                ) : selectedNode.type === "folder" ? (
+                  <p className="text-gray-500">Carpeta seleccionada.</p>
+                ) : (
+                  <div className="flex flex-col h-full">
+                    <div className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded-md mb-3">
+                      <h4 className="font-semibold text-sm">
+                        {selectedNode.label}
+                      </h4>
+
+                      {selectedNode.url && (
+                        <a
+                          href={selectedNode.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-blue-600 text-white text-xs px-3 py-1 rounded-md"
+                        >
+                          Abrir en Drive
+                        </a>
+                      )}
+                    </div>
+
+                    <IframeWithLoader
+                      src={selectedNode.url}
+                      className="flex-1 w-full border rounded-md"
+                      allow="fullscreen"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </MultiLevelDrawer>
+
+      {/* Panel secundario (opcional) */}
+      <GenericPanel
+        isOpen={!!openPanelItem}
+        onClose={() => setOpenPanelItem(null)}
+        title={openPanelItem?.label || "Detalle"}
+      />
+    </>
+  );
+}
+
+
+import { google } from "googleapis";
+
+const SECCIONES = {
+  manuales: {
+    folderEnv: "GDRIVE_ROOT_FOLDER",
+    linkType: "preview",
+  },
+  boletines: {
+    folderEnv: "BOLETINES_FOLDER_ID",
+    linkType: "preview",
+  },
+  cana: {
+    folderEnv: "CANA_FOLDER_ID",
+    linkType: "preview",
+  },
+  capacitacion: {
+    folderEnv: "CAPACITACION_FOLDER_ID",
+    linkType: "preview",
+  },
+  estadoCuenta: {
+    folderEnv: "GDRIVE_ESTADO_FOLDER",
+    linkType: "view",
+  },
+  almacenes: {
+    folderEnv: "GESTION_ALMACENES_FOLDER_ID",
+    linkType: "preview",
+  },
+  inventarios: {
+    folderEnv: "INVENTARIOS_FOLDER_ID",
+    linkType: "preview",
+  },
+  llantas: {
+    folderEnv: "LLANTAS_FOLDER_ID",
+    linkType: "preview",
+  },
+  marketing: {
+    folderEnv: "MARKETING_FOLDER_ID",
+    linkType: "preview",
+  },
+  material: {
+    folderEnv: "MATERIAL_FOLDER_ID",
+    linkType: "preview",
+  },
+  presupuestos: {
+    folderEnv: "PRESUPUESTOS_FOLDER_ID",
+    linkType: "preview",
+  },
+  procesos: {
+    folderEnv: "PROCESOS_FOLDER_ID",
+    linkType: "preview",
+  },
+  videos: {
+    folderEnv: "VIDEOS_FOLDER_ID",
+    linkType: "preview",
+  },
+};
+
+export default async function handler(req, res) {
+  try {
+    const { seccion } = req.query;
+
+    if (!seccion || !SECCIONES[seccion]) {
+      return res.status(400).json({
+        error: "Sección inválida o no especificada",
+      });
+    }
+
+    const { folderEnv, linkType } = SECCIONES[seccion];
+    const ROOT_FOLDER = process.env[folderEnv];
+
+    if (!ROOT_FOLDER) {
+      return res.status(500).json({
+        error: `No está definida la variable de entorno ${folderEnv}`,
+      });
+    }
+
+    const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: key,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    });
+
+    const drive = google.drive({ version: "v3", auth });
+
+    const readFolder = async (folderId) => {
+      const response = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: "files(id, name, mimeType)",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
+      const items = await Promise.all(
+        response.data.files.map(async (file) => {
+          if (file.mimeType === "application/vnd.google-apps.folder") {
+            return {
+              id: file.id,
+              name: file.name,
+              type: "folder",
+              children: await readFolder(file.id),
+            };
+          }
+
+          const url =
+            linkType === "view"
+              ? `https://drive.google.com/file/d/${file.id}/view`
+              : `https://drive.google.com/file/d/${file.id}/preview`;
+
+          return {
+            id: file.id,
+            name: file.name,
+            type: "file",
+            url,
+          };
+        })
+      );
+
+      return items;
+    };
+
+    const tree = await readFolder(ROOT_FOLDER);
+    res.status(200).json(tree);
+
+  } catch (error) {
+    console.error("Drive unified error:", error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+
+import React, { useCallback } from "react";
+import Particles from "react-tsparticles";
+import { loadSlim } from "tsparticles-slim";
+
+export default function ConstelacionesFondo() {
+  const particlesInit = useCallback(async (engine) => {
+    await loadSlim(engine);
+  }, []);
+
+  const particlesLoaded = useCallback(() => {}, []);
+
+  return (
+    <div
+      id="fondo-constelaciones"
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100vh",
+        backgroundColor: "#174e1eff", // fondo casi negro con un tono azul
+        zIndex: 0,
+        pointerEvents: "none",
+        overflow: "hidden",
+      }}
+    >
+      <Particles
+        id="tsparticles"
+        init={particlesInit}
+        loaded={particlesLoaded}
+        style={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          top: 0,
+          left: 0,
+          zIndex: 0,
+        }}
+        options={{
+          fullScreen: { enable: false },
+          background: { color: "#1c4116ff" },
+          fpsLimit: 60,
+          particles: {
+            number: { value: 130, density: { enable: true, area: 800 } },
+            color: {
+              value: ["#e517ecff", "#f3ef0fff", "#10f7ebff", "#fa7407ff"], // 💠 colores suaves y claros
+            },
+            shape: { type: "circle" },
+            opacity: {
+              value: 0.7,
+              random: true,
+              anim: { enable: true, speed: 0.5, opacity_min: 0.2, sync: false },
+            },
+            size: {
+              value: { min: 1, max: 3 },
+              random: true,
+              anim: { enable: true, speed: 2, size_min: 0.3, sync: false },
+            },
+            move: {
+              enable: true,
+              speed: 0.3,
+              direction: "none",
+              random: true,
+              straight: false,
+              outModes: "out",
+            },
+            links: {
+              enable: true,
+              color: "#a0c4ff",
+              distance: 150,
+              opacity: 0.25,
+              width: 0.8,
+            },
+          },
+          interactivity: {
+            events: {
+              onHover: { enable: true, mode: "repulse" },
+              resize: true,
+            },
+            modes: {
+              repulse: { distance: 80, duration: 0.4 },
+            },
+          },
+          detectRetina: true,
+        }}
+      />
+    </div>
+  );
+}
+
+
+import React, { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import logo from "../assets/dimasur.webp";
+import navbarBg from "../assets/navbar.jpg";
+
+export default function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const cerrarSesion = () => {
+    localStorage.removeItem("auth");
+    window.location.reload(); // esto regresa al login
+  };
+
+  return (
+    <motion.nav
+      initial={{ y: -50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
+        scrolled ? "backdrop-blur-md shadow-md" : "bg-transparent"
+      }`}
+      style={{
+        backgroundImage: `
+          linear-gradient(to bottom, rgba(0, 0, 0, 0) 60%, rgba(0, 64, 32, 0.95) 100%),
+          url(${navbarBg})
+        `,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: scrolled ? "rgba(0,0,0,0.6)" : "transparent",
+      }}
+    >
+      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+        {/* Logo */}
+        <div className="flex items-center space-x-3">
+          <img
+            src={logo}
+            alt="Logo Dimasur"
+            className="h-10 w-auto drop-shadow-lg"
+          />
+        </div>
+
+        {/* Título */}
+        <div
+          className="
+            md:absolute 
+            md:left-1/2 
+            md:transform 
+            md:-translate-x-1/2
+            text-center
+          "
+        >
+          <h1 className="text-lg sm:text-xl md:text-3xl font-semibold tracking-wide text-white drop-shadow-lg font-[Poppins]">
+            Portal de Refacciones
+          </h1>
+        </div>
+
+        {/* Menú derecho */}
+        <div className="hidden md:flex items-center space-x-6 text-sm font-medium text-white drop-shadow-md">
+          <a href="/inicio" className="hover:text-blue-300 transition-colors">
+            Inicio
+          </a>
+
+          <a
+            href="https://dshb-dm-refacciones.streamlit.app/#resumen-general-de-compras-2025"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-blue-300 transition-colors"
+          >
+            Dashboard
+          </a>
+
+          {/* BOTÓN CERRAR SESIÓN */}
+          <button
+            onClick={cerrarSesion}
+            className="px-4 py-1 rounded-lg bg-red-600 hover:bg-red-700 transition-all"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    </motion.nav>
+  );
+}
+
+
+
+
+

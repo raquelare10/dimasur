@@ -1,0 +1,13 @@
+packages:
+  "framer-motion": "For premium smooth animations, page transitions, and interactive visual feedback"
+  "clsx": "For conditional tailwind class joining"
+  "tailwind-merge": "For conflict-free tailwind class merging"
+
+images:
+  - path: "artifacts/dimasur-portal/public/images/tech-bg.png"
+    description: "Abstract dark green and black tech background with subtle geometric lines, glowing nodes, and a deep corporate aesthetic, suitable for a professional dashboard backdrop"
+    aspect_ratio: "16:9"
+
+notes:
+  - "Authentication relies on the Orval-generated useGetMe and useSendMagicLink hooks from @workspace/api-client-react."
+  - "The file explorer assumes DriveNode children can be accessed directly from the response tree."

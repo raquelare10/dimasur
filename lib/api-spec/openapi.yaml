@@ -1,22 +1,24 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Dimasur Portal API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: drive
+    description: Google Drive operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +26,104 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/send-magic-link:
+    post:
+      operationId: sendMagicLink
+      tags: [auth]
+      summary: Send magic link to email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMagicLinkRequest"
+      responses:
+        "200":
+          description: Magic link sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid domain or request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/validate:
+    get:
+      operationId: validateMagicLink
+      tags: [auth]
+      summary: Validate magic link token
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Token valid, session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "401":
+          description: Token expired or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /drive:
+    get:
+      operationId: getDriveStructure
+      tags: [drive]
+      summary: Get Drive folder structure for a section
+      parameters:
+        - name: seccion
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Drive folder structure
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriveNode"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +133,55 @@ components:
           type: string
       required:
         - status
-
+    SendMagicLinkRequest:
+      type: object
+      properties:
+        email:
+          type: string
+      required:
+        - email
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    UserInfo:
+      type: object
+      properties:
+        email:
+          type: string
+        authenticated:
+          type: boolean
+      required:
+        - email
+        - authenticated
+    DriveNode:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [folder, file]
+        url:
+          type: string
+          nullable: true
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/DriveNode"
+      required:
+        - id
+        - name
+        - type
